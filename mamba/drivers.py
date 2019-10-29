@@ -35,9 +35,11 @@ def full_lib_path(lib: string, path: string) -> List[string]:
     else:
         return [path + candidate for candidate in candidates]
 
+
 def allbyref(f, *args):
     # this function calls all args in args using byref.
     return f(*[byref(arg) for arg in args])
+
 
 class Driver(object):
     __lib = "default_library_here"
@@ -71,25 +73,26 @@ class Driver(object):
         raise NotImplementedError(
             "BiCG not implemented for {}".format(self.__class__.__name__))
 
+
 class MKL(Driver):
     _lib = "libmkl_rt"
 
     def __init__(self, path: string=None):
         super().init(path)
 
-    def fgmres_init(n: int, x: np.ndarray = None, b: np.ndarray = None) -> Tuple[cintArray128, cdoubleArray128]:
+    def gmres_init(n: int, x: np.ndarray = None, b: np.ndarray = None) -> Tuple[cintArray128, cdoubleArray128]:
         """Load default parameter arrays for MKL sparse linear algebra
 
         The `Intel MKL
-        <https://software.intel.com/en-us/mkl-developer-reference-c-dfgmres-init>`_
+        <https://software.intel.com/en-us/mkl-developer-reference-c-dgmres-init>`_
         C function signature is
         ::
-            void dfgmres_init (const MKL_INT *n , const double *x ,const double *b ,
+            void dgmres_init (const MKL_INT *n , const double *x ,const double *b ,
                 MKL_INT *RCI_request , MKL_INT *ipar , double *dpar , double *tmp );
 
         See:
         `Intel MKL Docs
-        <https://software.intel.com/en-us/mkl-developer-reference-c-dfgmres-init>`_
+        <https://software.intel.com/en-us/mkl-developer-reference-c-dgmres-init>`_
 
         Args:
             n : Size of matrix problem.
@@ -100,7 +103,7 @@ class MKL(Driver):
             MKL integer and double parameter arrays `ipar, dpar`
         """
         try:
-            fgmres_init = mkl.dfgmres_init
+            gmres_init = mkl.dgmres_init
         except:
             raise
         assert isinstance(
@@ -123,11 +126,10 @@ class MKL(Driver):
             rci = ct.c_int(0)
             ipar = (ct.c_int * 128)(*np.zeros(128, dtype=int))
             dpar = (ct.c_double * 128)(*np.zeros(128, dtype=ct.c_double))
-            allbyref(fgmres_init, n, x, b, rci, ipar, dpar, tmp)
+            allbyref(gmres_init, n, x, b, rci, ipar, dpar, tmp)
             return ipar, dpar
         else:
-            raise exception("fgmres failed")
-
+            raise exception("gmres failed")
 
     def ilu(M: scipymkl_csr, intel_params: Tuple[cintArray128, cdoubleArray128] = None) -> scipymkl_csr:
         """Incomplete LU factorization with zero threshold using MKL dscrilu0
@@ -135,7 +137,7 @@ class MKL(Driver):
         This function produces an incomplete LU-factorization of the 
         scipy-coupled MKL CSR matrix X.  It uses the zero pattern of the original matrix
         and produces a new scipymkl_csr instance.
-        The intel_params array tuple should be obtained by calling fgmres_init.
+        The intel_params array tuple should be obtained by calling gmres_init.
         The `Intel MKL
         <https://software.intel.com/en-us/mkl-developer-reference-c-dcsrilu0>`_
         C function signature is
@@ -151,7 +153,7 @@ class MKL(Driver):
         Args:
             M : Square sparse MKL-coupled matrix
             intel_params : (ipar,dpar) Integer and double parameters
-                    for MKL fgmres/ilu0. Defaults to output of fgmres_init
+                    for MKL gmres/ilu0. Defaults to output of gmres_init
             b : Initial estimate of y. Defaults to np.zeros(n).
         Returns:
             ``(ctypes.c_int*128)(ipar), (ctypes.c_double*128)(dpar)`` :
@@ -165,7 +167,7 @@ class MKL(Driver):
             "non-MKL paired sparsed matrices"
 
         if intel_params is None:
-            ipar, dpar = fgmres_init(M.n)
+            ipar, dpar = gmres_init(M.n)
         else:
             ipar, dpar = intel_params
 
